@@ -1,0 +1,10 @@
+{
+  "name": "Figma Tetris",
+  "id": "831000487189051522",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "relaunchButtons": [
+    { "command": "play", "name": "Play Figma Tetris!" }
+  ]
+}
