@@ -211,6 +211,23 @@ const rotate = () => {
       child.visible = false
     }
   })
+
+  // Push inwards if rotating will cause out of bounds
+  const unitChildren = visibleTetrimoGroup.children
+
+  let minX = 0
+  let maxX = 9
+  for (let i = 0; i < unitChildren.length; i++) {
+    const unitChild = unitChildren[i]
+    const { x } = unitBoardCoordinates(unitChild)
+    minX = Math.min(x, minX)
+    maxX = Math.max(x, maxX)
+  }
+  if (minX < 0) {
+    moveCurrentTetrimoX(-1 * minX)
+  } else if (maxX > 9) {
+    moveCurrentTetrimoX(9 - maxX)
+  }
 }
 
 const canMoveDown = (): boolean => {
