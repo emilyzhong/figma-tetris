@@ -1,4 +1,4 @@
-figma.showUI(__html__);
+figma.showUI(__html__, { height: 310, width: 350 });
 figma.ui.onmessage = msg => {
     console.log("");
     switch (msg.type) {
@@ -25,8 +25,10 @@ figma.ui.onmessage = msg => {
         case 'rotate':
             rotate();
             break;
+        case 'hold':
+            hold();
+            break;
     }
-    // figma.closePlugin();
 };
 const playPage = figma.root.findChild(node => node.name === 'Play');
 if (!playPage) {
@@ -44,6 +46,7 @@ const TETRIMO_COMPONENTS = figma.root.findAll(node => {
 });
 const BOARD = figma.currentPage.findOne(node => node.name === "Board" && node.type === 'FRAME');
 const NEXT_PIECE = figma.currentPage.findOne(node => node.name === "Next Piece");
+const HOLD = figma.currentPage.findOne(node => node.name === "Hold");
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
 // These coordiantes are the "solid" areas of each tetrimo type,
@@ -112,11 +115,12 @@ const unitBoardCoordinates = (unitNode) => {
     return TUP(asUnits(x), asUnits(y));
 };
 const resetGame = () => {
-    var _a;
+    var _a, _b;
     clearInterval(gameFunction);
     gameFunction = null;
     BOARD.children.forEach(child => child.remove());
     (_a = NEXT_PIECE === null || NEXT_PIECE === void 0 ? void 0 : NEXT_PIECE.children) === null || _a === void 0 ? void 0 : _a.forEach(child => child.remove());
+    (_b = HOLD === null || HOLD === void 0 ? void 0 : HOLD.children) === null || _b === void 0 ? void 0 : _b.forEach(child => child.remove());
     score = 0;
     needNewTetrimo = true;
     rotationNum = 0;
@@ -229,6 +233,29 @@ const rotate = () => {
     }
     else if (maxX > 9) {
         moveCurrentTetrimoX(9 - maxX);
+    }
+};
+const hold = () => {
+    if (!HOLD) {
+        return;
+    }
+    const heldPiece = HOLD.findChild(() => true);
+    // Add curent piece to hold
+    const currentPiece = tetrimoGroup();
+    currentPiece.x = 0;
+    currentPiece.y = UNIT / 2;
+    currentPiece.resize(currentPiece.width * 0.6, currentPiece.height * 0.6);
+    HOLD.appendChild(currentPiece);
+    if (!heldPiece) {
+        visibleTetrimoGroup = null;
+        generateCurrentTetrimo();
+    }
+    else {
+        heldPiece.x = BOARD.width / 2;
+        heldPiece.y = 0;
+        heldPiece.resize(heldPiece.width * 1.67, heldPiece.height * 1.67);
+        BOARD.appendChild(heldPiece);
+        visibleTetrimoGroup = heldPiece.findChild(node => node.visible);
     }
 };
 const canMoveDown = () => {

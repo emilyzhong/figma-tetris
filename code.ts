@@ -1,4 +1,4 @@
-figma.showUI(__html__);
+figma.showUI(__html__, {height: 310, width: 350});
 
 figma.ui.onmessage = msg => {
   console.log("")
@@ -26,9 +26,10 @@ figma.ui.onmessage = msg => {
     case 'rotate':
       rotate()
       break
+    case 'hold':
+      hold()
+      break
   }
-
-  // figma.closePlugin();
 }
 
 const playPage = figma.root.findChild(node => node.name === 'Play')
@@ -39,7 +40,6 @@ if (!playPage) {
  figma.root.setRelaunchData({ play: ''})
 }
 
-
 const UNIT = 60
 const CLOCK_TICK = 800
 // Array of tetrimo components to choose from
@@ -48,6 +48,7 @@ const TETRIMO_COMPONENTS: Array<ComponentNode> = <Array<ComponentNode>>figma.roo
 })
 const BOARD: FrameNode = figma.currentPage.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
 const NEXT_PIECE: FrameNode = figma.currentPage.findOne(node => node.name === "Next Piece") as FrameNode
+const HOLD: FrameNode = figma.currentPage.findOne(node => node.name === "Hold") as FrameNode
 
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
@@ -125,6 +126,7 @@ const resetGame = () => {
   gameFunction = null
   BOARD.children.forEach(child => child.remove())
   NEXT_PIECE?.children?.forEach(child => child.remove())
+  HOLD?.children?.forEach(child => child.remove())
   score = 0
   needNewTetrimo = true
   rotationNum = 0
@@ -250,6 +252,28 @@ const rotate = () => {
     moveCurrentTetrimoX(-1 * minX)
   } else if (maxX > 9) {
     moveCurrentTetrimoX(9 - maxX)
+  }
+}
+
+const hold = () => {
+  if (!HOLD) { return }
+  const heldPiece = HOLD.findChild(() => true) as SceneNode & ChildrenMixin 
+  // Add curent piece to hold
+  const currentPiece = tetrimoGroup() 
+  currentPiece.x = 0
+  currentPiece.y = UNIT / 2
+  currentPiece.resize(currentPiece.width * 0.6, currentPiece.height * 0.6)
+  HOLD.appendChild(currentPiece)
+
+  if (!heldPiece) {
+    visibleTetrimoGroup = null
+    generateCurrentTetrimo()
+  } else {
+    heldPiece.x = BOARD.width / 2
+    heldPiece.y = 0
+    heldPiece.resize(heldPiece.width * 1.67, heldPiece.height * 1.67)
+    BOARD.appendChild(heldPiece)
+    visibleTetrimoGroup = heldPiece.findChild(node => node.visible) as SceneNode & ChildrenMixin 
   }
 }
 

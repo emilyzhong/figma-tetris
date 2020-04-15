@@ -1,18 +1,37 @@
 <div id="content" class='type type--pos-small-normal'>
+  <div id="main">
   <div id="instructions">
-    <b class="type type--pos-medium-bold">Controls</b>
-    <ul>
-      <li>w: rotate</li>
-      <li>a: move left</li>
-      <li>s: soft drop</li>
-      <li>d: move right</li>
-      <li>space: hard drop</li>
-    </ul>
+    <b class="type type--pos-large-bold">Controls</b>
+    <div id="instructions-inner">
+      <ul>
+        <li>w: rotate</li>
+        <li>a: move left</li>
+        <li>s: soft drop</li>
+        <li>d: move right</li>
+      </ul>
+      <ul>
+        <li>e: hold</li>
+        <li>space: hard drop</li>
+      </ul>
+    </div>
   </div>
-  <b class="type type--pos-medium-bold"><p>Current Score: <span id="score">0</span></p></b>
-  <div id="button-container">
-    <button id="reset" class="button button--secondary">Reset</button>
-    <button id="start" class="button button--primary">Start</button>
+  <div id="note">
+    <div id="warning-icon">⚠️</div>
+    <div>
+      <b>To play Figma Tetris, the plugin needs to be run on a Figma Tetris file.</b> <br>
+      <div id="more-text">
+        You can duplicate the most updated version of the file <a href="https://www.figma.com/community/file/831343347679737844" target="_blank">here</a>.
+        Some newer features may not work on older versions of the file.
+      </div>
+    </div>
+  </div>
+  </div>
+  <div id="footer">
+    <b class="type type--pos-large-bold current-score">Current Score: <span id="score">0</span></b>
+    <div id="button-container">
+      <button id="reset" class="button button--secondary">Reset</button>
+      <button id="start" class="button button--primary">Start</button>
+    </div>
   </div>
 </div>
 
@@ -59,6 +78,9 @@ document.getElementById('content').onkeypress = (e) => {
     case ' ':
       sendMessage('hard-drop')
       break
+    case 'e':
+      sendMessage('hold')
+      break
   }
 }
 
@@ -66,28 +88,75 @@ onmessage = (event) => {
   document.getElementById("score").textContent = event.data.pluginMessage
 }
 
+document.getElementById("toggle-header").onclick = e => {
+  document.getElementById("instructions").classList.toggle('open');
+}
+
 </script>
 
 <style>
 
   #content {
-    padding: 0 8px;
+    padding: 4px 16px;
   }
 
   ul {
-    padding-left: 24px;
-    margin: 8px;
+    padding-left: 12px;
+    margin: 0 8px;
+  }
+
+  #main {
+    margin-bottom: 64px;
+  }
+
+  #instructions {
+    margin-bottom: 16px;
+  }
+
+  #instructions-inner {
+    display: flex;
+  }
+
+  #note {
+    padding: 12px;
+    background: #E8F5F9;
+    border-radius: 4px; 
+    display: flex;
+  }
+
+  #warning-icon {
+    margin-right: 12px;
+    font-size: 16px;
+    margin-top: 6px;
+  }
+
+  #more-text {
+    margin-top: 8px;
+  }
+
+  #footer {
+    width: 100%;
+    margin: 0;
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    padding: 8px 16px;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    border-top: 1px solid #e5e5e5;
   }
 
   #button-container {
-    width: 100%;
     display: flex;
+    margin: 0;
   }
 
   #reset {
     margin-right: 8px;
   }
-
+ 
   * { -webkit-box-sizing: border-box; box-sizing: border-box; }
 
 /*  Typography */
