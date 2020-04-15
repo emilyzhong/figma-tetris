@@ -43,6 +43,7 @@ const TETRIMO_COMPONENTS = figma.root.findAll(node => {
     return node.type === 'COMPONENT' && node.name.length === 1;
 });
 const BOARD = figma.currentPage.findOne(node => node.name === "Board" && node.type === 'FRAME');
+const NEXT_PIECE = figma.currentPage.findOne(node => node.name === "Next Piece");
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
 // These coordiantes are the "solid" areas of each tetrimo type,
@@ -111,9 +112,11 @@ const unitBoardCoordinates = (unitNode) => {
     return TUP(asUnits(x), asUnits(y));
 };
 const resetGame = () => {
+    var _a;
     clearInterval(gameFunction);
     gameFunction = null;
     BOARD.children.forEach(child => child.remove());
+    (_a = NEXT_PIECE === null || NEXT_PIECE === void 0 ? void 0 : NEXT_PIECE.children) === null || _a === void 0 ? void 0 : _a.forEach(child => child.remove());
     score = 0;
     needNewTetrimo = true;
     rotationNum = 0;
@@ -128,20 +131,37 @@ const generateCurrentTetrimo = () => {
     }
     const index = Math.floor(Math.random() * TETRIMO_COMPONENTS.length);
     const tetrimo = TETRIMO_COMPONENTS[index];
-    const tetrimoGroup = tetrimo.createInstance();
-    BOARD.appendChild(tetrimoGroup);
-    tetrimoGroup.x = BOARD.width / 2;
-    tetrimoGroup.y = 0;
+    let tetrimoGroup = tetrimo.createInstance();
     rotationNum = 1;
     tetrimoGroup.children.forEach(child => {
         if (child.name == rotationNum.toString()) {
-            visibleTetrimoGroup = child;
-            visibleTetrimoGroup.visible = true;
+            child.visible = true;
         }
         else {
             child.visible = false;
         }
     });
+    // If we are supporting seeing the next piece, set the existing next piece as the new current piece,
+    // and set the newly generated piece as the new next piece
+    if (NEXT_PIECE) {
+        const nextTetrimoGroup = tetrimoGroup;
+        nextTetrimoGroup.resize(nextTetrimoGroup.width * .6, nextTetrimoGroup.height * .6);
+        tetrimoGroup = NEXT_PIECE.findChild(() => true); // There should only be one thing piece
+        NEXT_PIECE.appendChild(nextTetrimoGroup);
+        nextTetrimoGroup.y = UNIT / 2;
+        if (!tetrimoGroup) {
+            // The first time this gets run, tetrimoGroup will be null because there is nothing in next piece
+            // Thus, we will call use this first call as filling "next piece", then short-circuit and call
+            // generateCurrentTetrimo to fill both the current piece and the next piece.
+            generateCurrentTetrimo();
+            return;
+        }
+        tetrimoGroup === null || tetrimoGroup === void 0 ? void 0 : tetrimoGroup.resize(tetrimoGroup.width * 1.67, tetrimoGroup.height * 1.67);
+    }
+    tetrimoGroup.x = BOARD.width / 2;
+    tetrimoGroup.y = 0;
+    BOARD.appendChild(tetrimoGroup);
+    visibleTetrimoGroup = tetrimoGroup.findChild(child => child.visible);
     needNewTetrimo = false;
 };
 const moveCurrentTetrimoX = (x) => {
