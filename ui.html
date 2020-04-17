@@ -20,7 +20,7 @@
     <div>
       <b>To play Figma Tetris, the plugin needs to be run on a Figma Tetris file.</b> <br>
       <div id="more-text">
-        You can duplicate the most updated version of the file <a href="https://www.figma.com/community/file/831343347679737844" target="_blank">here</a>.
+        If you've already duplicated it, you're good to go! You can duplicate the most updated version of the file <a href="https://www.figma.com/community/file/831343347679737844" target="_blank">here</a>.
         Some newer features may not work on older versions of the file.
       </div>
     </div>
@@ -85,7 +85,14 @@ document.getElementById('content').onkeypress = (e) => {
 }
 
 onmessage = (event) => {
-  document.getElementById("score").textContent = event.data.pluginMessage
+  if (event.data.pluginMessage === "invalid file") {
+    // If the file is invalid, only show instructions on downloading file
+    document.getElementById("instructions").style.display = "none"
+    document.getElementById("footer").style.display = "none"
+    document.getElementById("main").style.marginBlockEnd = 0
+  } else {
+    document.getElementById("score").textContent = event.data.pluginMessage
+  }
 }
 
 document.getElementById("toggle-header").onclick = e => {

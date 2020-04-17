@@ -1,4 +1,5 @@
-figma.showUI(__html__, {height: 310, width: 350});
+// Visible starts out as false and becomes true after checking if file is valid.
+figma.showUI(__html__, {visible: false, height: 320, width: 350});
 
 figma.ui.onmessage = msg => {
   console.log("")
@@ -33,11 +34,16 @@ figma.ui.onmessage = msg => {
 }
 
 const playPage = figma.root.findChild(node => node.name === 'Play')
-if (!playPage) {
-  figma.closePlugin()
+if (playPage) {
+  figma.currentPage = playPage
+  figma.ui.show()
+  figma.root.setRelaunchData({ play: ''})
 } else {
- figma.currentPage = playPage
- figma.root.setRelaunchData({ play: ''})
+  figma.ui.postMessage("invalid file")
+  setTimeout(() => {
+    figma.ui.resize(300, 200)
+    figma.ui.show()
+  }, 500) // Buffer time to prevent flickering.
 }
 
 const UNIT = 60
