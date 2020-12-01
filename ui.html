@@ -4,13 +4,13 @@
     <b class="type type--pos-large-bold">Controls</b>
     <div id="instructions-inner">
       <ul>
-        <li>w: rotate</li>
-        <li>a: move left</li>
-        <li>s: soft drop</li>
-        <li>d: move right</li>
+        <li>w or &uarr;: rotate</li>
+        <li>a or &larr;: move left</li>
+        <li>s or &darr;: soft drop</li>
+        <li>d or &rarr;: move right</li>
       </ul>
       <ul>
-        <li>e: hold</li>
+        <li>e or c: hold</li>
         <li>space: hard drop</li>
       </ul>
     </div>
@@ -38,7 +38,7 @@
 <script>
 
 sendMessage = (type) => {
-  parent.postMessage({ pluginMessage: { type: type }}, '*') 
+  parent.postMessage({ pluginMessage: { type: type }}, '*')
 }
 
 startGame = () => {
@@ -49,40 +49,39 @@ resetGame = () => {
   sendMessage('reset')
 }
 
-document.getElementById('start').onclick = () => {
+document.getElementById('start').addEventListener('click', () => {
   startGame()
-}
+})
 
-document.getElementById('reset').onclick = () => { resetGame() }
+document.getElementById('reset').addEventListener('click', () => { resetGame() })
 
-document.getElementById('content').onkeypress = (e) => {
-  if (window.event) { // IE                    
-    keynum = e.keyCode;
-  } else if(e.which){ // Netscape/Firefox/Opera                   
-    keynum = e.which;
-  }
-
-  switch (String.fromCharCode(keynum)) {
-    case 'a':
+document.addEventListener('keydown', (e) => {
+  switch (e.code) {
+    case 'KeyA':
+    case 'ArrowLeft':
       sendMessage('move-left')
       break
-    case 'd':
+    case 'KeyD':
+    case 'ArrowRight':
       sendMessage('move-right')
       break
-    case 's':
+    case 'KeyS':
+    case 'ArrowDown':
       sendMessage('soft-drop')
       break
-    case 'w':
+    case 'KeyW':
+    case 'ArrowUp':
       sendMessage('rotate')
       break
-    case ' ':
+    case 'Space':
       sendMessage('hard-drop')
       break
-    case 'e':
+    case 'KeyE':
+    case 'KeyC':
       sendMessage('hold')
       break
   }
-}
+})
 
 onmessage = (event) => {
   if (event.data.pluginMessage === "invalid file") {
@@ -93,10 +92,6 @@ onmessage = (event) => {
   } else {
     document.getElementById("score").textContent = event.data.pluginMessage
   }
-}
-
-document.getElementById("toggle-header").onclick = e => {
-  document.getElementById("instructions").classList.toggle('open');
 }
 
 </script>
@@ -127,7 +122,7 @@ document.getElementById("toggle-header").onclick = e => {
   #note {
     padding: 12px;
     background: #E8F5F9;
-    border-radius: 4px; 
+    border-radius: 4px;
     display: flex;
   }
 
@@ -163,7 +158,7 @@ document.getElementById("toggle-header").onclick = e => {
   #reset {
     margin-right: 8px;
   }
- 
+
   * { -webkit-box-sizing: border-box; box-sizing: border-box; }
 
 /*  Typography */
