@@ -2,7 +2,6 @@
 figma.showUI(__html__, {visible: false, height: 320, width: 350});
 
 figma.ui.onmessage = msg => {
-  console.log("")
   switch (msg.type) {
     case 'start':
       if (!gameFunction) {
@@ -30,6 +29,12 @@ figma.ui.onmessage = msg => {
     case 'hold':
       hold()
       break
+    case 'player-1-select':
+      updatePlayerNum(1)
+      break
+    case 'player-2-select':
+      updatePlayerNum(2)
+      break
   }
 }
 
@@ -52,9 +57,6 @@ const CLOCK_TICK = 800
 const TETRIMO_COMPONENTS: Array<ComponentNode> = <Array<ComponentNode>>figma.root.findAll(node => {
   return node.type === 'COMPONENT' && node.name.length === 1
 })
-const BOARD: FrameNode = figma.currentPage.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
-const NEXT_PIECE: FrameNode = figma.currentPage.findOne(node => node.name === "Next Piece") as FrameNode
-const HOLD: FrameNode = figma.currentPage.findOne(node => node.name === "Hold") as FrameNode
 
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
@@ -64,10 +66,16 @@ const TUP = (x: number, y: number) => { return {x, y}} // Helper function
 const asUnits = (n) => Math.round(n / UNIT)
 
 let gameFunction
-let visibleTetrimoGroup: SceneNode & ChildrenMixin 
+let visibleTetrimoGroup: SceneNode & ChildrenMixin
 let rotationNum = 0
 let needNewTetrimo = true
 let score = 0
+let playerNum = 1;
+
+let BOARD_PARENT_FRAME: FrameNode = figma.currentPage.findOne(node => node.name === `Player ${playerNum}`) as FrameNode
+let BOARD: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
+let NEXT_PIECE: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece") as FrameNode
+let HOLD: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold") as FrameNode
 
 function clone(val) {
   const type = typeof val
@@ -90,6 +98,19 @@ function clone(val) {
     }
   }
   throw 'unknown'
+}
+
+const updatePlayerNum = (num: number) => {
+  if (playerNum === num) return
+
+  playerNum = num
+
+  BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${num}`) as FrameNode
+  BOARD_PARENT_FRAME.visible = true
+
+  BOARD = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
+  NEXT_PIECE = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece") as FrameNode
+  HOLD = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold") as FrameNode
 }
 
 // This stores which coordinates of the board are filled.
@@ -169,14 +190,14 @@ const generateCurrentTetrimo = () => {
     NEXT_PIECE.appendChild(nextTetrimoGroup)
     nextTetrimoGroup.y = UNIT / 2
 
-    if (!tetrimoGroup) { 
+    if (!tetrimoGroup) {
       // The first time this gets run, tetrimoGroup will be null because there is nothing in next piece
       // Thus, we will call use this first call as filling "next piece", then short-circuit and call
       // generateCurrentTetrimo to fill both the current piece and the next piece.
       generateCurrentTetrimo()
       return
     }
-    
+
     tetrimoGroup?.resize(tetrimoGroup.width * 1.67, tetrimoGroup.height * 1.67)
   }
 
@@ -217,7 +238,7 @@ const moveCurrentTetrimoY = (y: number) => {
 
   if (canMoveDown()) {
     tetrimoGroup().y += (UNIT * y)
-  } 
+  }
 }
 
 // Very hacky lol
@@ -233,7 +254,7 @@ const rotate = () => {
     rotationNum = 0
   }
 
-  // Toggle visible layers within instance 
+  // Toggle visible layers within instance
   tetrimoGroup().children.forEach(child => {
     if (child.name == rotationNum.toString()) {
       visibleTetrimoGroup = child as SceneNode & ChildrenMixin
@@ -263,9 +284,9 @@ const rotate = () => {
 
 const hold = () => {
   if (!HOLD) { return }
-  const heldPiece = HOLD.findChild(() => true) as SceneNode & ChildrenMixin 
+  const heldPiece = HOLD.findChild(() => true) as SceneNode & ChildrenMixin
   // Add curent piece to hold
-  const currentPiece = tetrimoGroup() 
+  const currentPiece = tetrimoGroup()
   currentPiece.x = 0
   currentPiece.y = UNIT / 2
   currentPiece.resize(currentPiece.width * 0.6, currentPiece.height * 0.6)
@@ -279,7 +300,7 @@ const hold = () => {
     heldPiece.y = 0
     heldPiece.resize(heldPiece.width * 1.67, heldPiece.height * 1.67)
     BOARD.appendChild(heldPiece)
-    visibleTetrimoGroup = heldPiece.findChild(node => node.visible) as SceneNode & ChildrenMixin 
+    visibleTetrimoGroup = heldPiece.findChild(node => node.visible) as SceneNode & ChildrenMixin
   }
 }
 
@@ -306,10 +327,10 @@ const canMoveDown = (): boolean => {
 
 const updateFilledCoords = () => {
   const unitChildren = visibleTetrimoGroup.children
- 
+
   unitChildren.forEach(unitChild => {
     addToFilledCoords(unitChild as RectangleNode)
-   
+
     if (_filledCoords[0]) {
       // Game has ended.
       figma.closePlugin()

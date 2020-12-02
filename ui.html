@@ -15,6 +15,11 @@
       </ul>
     </div>
   </div>
+  <b class="type type--pos-large-bold">Select Multiplayer (optional)</b>
+  <div>
+    <input type="radio" id="player-1-select" name="player" value="1" onclick="selectMultiplayer(this)"><label for="1">Player 1</label>
+    <input type="radio" id="player-2-select" name="player" value="2" onclick="selectMultiplayer(this)"><label for="2">Player 2</label>
+  </div>
   <div id="note">
     <div id="warning-icon">⚠️</div>
     <div>
@@ -43,10 +48,18 @@ sendMessage = (type) => {
 
 startGame = () => {
   sendMessage('start')
+  document.getElementById('player-1-select').disabled = true
+  document.getElementById('player-2-select').disabled = true
 }
 
 resetGame = () => {
   sendMessage('reset')
+  document.getElementById('player-1-select').disabled = false
+  document.getElementById('player-2-select').disabled = false
+}
+
+selectMultiplayer = (selection) => {
+  sendMessage(selection.id)
 }
 
 document.getElementById('start').addEventListener('click', () => {
@@ -124,6 +137,7 @@ onmessage = (event) => {
     background: #E8F5F9;
     border-radius: 4px;
     display: flex;
+    margin: 16px 0;
   }
 
   #warning-icon {

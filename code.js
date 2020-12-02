@@ -1,7 +1,6 @@
 // Visible starts out as false and becomes true after checking if file is valid.
 figma.showUI(__html__, { visible: false, height: 320, width: 350 });
 figma.ui.onmessage = msg => {
-    console.log("");
     switch (msg.type) {
         case 'start':
             if (!gameFunction) {
@@ -29,6 +28,12 @@ figma.ui.onmessage = msg => {
         case 'hold':
             hold();
             break;
+        case 'player-1-select':
+            updatePlayerNum(1);
+            break;
+        case 'player-2-select':
+            updatePlayerNum(2);
+            break;
     }
 };
 const playPage = figma.root.findChild(node => node.name === 'Play');
@@ -50,9 +55,6 @@ const CLOCK_TICK = 800;
 const TETRIMO_COMPONENTS = figma.root.findAll(node => {
     return node.type === 'COMPONENT' && node.name.length === 1;
 });
-const BOARD = figma.currentPage.findOne(node => node.name === "Board" && node.type === 'FRAME');
-const NEXT_PIECE = figma.currentPage.findOne(node => node.name === "Next Piece");
-const HOLD = figma.currentPage.findOne(node => node.name === "Hold");
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
 // These coordiantes are the "solid" areas of each tetrimo type,
@@ -64,6 +66,11 @@ let visibleTetrimoGroup;
 let rotationNum = 0;
 let needNewTetrimo = true;
 let score = 0;
+let playerNum = 1;
+let BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${playerNum}`);
+let BOARD = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME');
+let NEXT_PIECE = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece");
+let HOLD = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold");
 function clone(val) {
     const type = typeof val;
     if (val === null) {
@@ -90,6 +97,16 @@ function clone(val) {
     }
     throw 'unknown';
 }
+const updatePlayerNum = (num) => {
+    if (playerNum === num)
+        return;
+    playerNum = num;
+    BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${num}`);
+    BOARD_PARENT_FRAME.visible = true;
+    BOARD = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME');
+    NEXT_PIECE = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece");
+    HOLD = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold");
+};
 // This stores which coordinates of the board are filled.
 // It is first indexed on y, then x, then a rectangle node that will sit at that location.
 let _filledCoords = {};
@@ -214,7 +231,7 @@ const rotate = () => {
     if (rotationNum == 4) {
         rotationNum = 0;
     }
-    // Toggle visible layers within instance 
+    // Toggle visible layers within instance
     tetrimoGroup().children.forEach(child => {
         if (child.name == rotationNum.toString()) {
             visibleTetrimoGroup = child;
