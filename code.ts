@@ -1,5 +1,5 @@
 // Visible starts out as false and becomes true after checking if file is valid.
-figma.showUI(__html__, {visible: false, height: 320, width: 350});
+figma.showUI(__html__, {visible: false, height: 453, width: 400});
 
 figma.ui.onmessage = msg => {
   switch (msg.type) {
@@ -29,13 +29,27 @@ figma.ui.onmessage = msg => {
     case 'hold':
       hold()
       break
+    case 'enable-multiplayer':
+      enableMultiplayer()
+      break
+    case 'disable-multiplayer':
+      disableMultiplayer()
+      break;
     case 'player-1-select':
       updatePlayerNum(1)
       break
     case 'player-2-select':
       updatePlayerNum(2)
       break
+    case 'dead-row': // Simulate adding a dead row to the queue. Only for development purposes
+      setNumPendingDeadRows(numPendingDeadRows() + 1)
+      break
   }
+}
+
+const invalidFile = () => {
+  figma.notify('Invalid / out of date file: Please duplicate the Figma tetris file and try again.')
+  figma.closePlugin()
 }
 
 const playPage = figma.root.findChild(node => node.name === 'Play')
@@ -44,11 +58,7 @@ if (playPage) {
   figma.ui.show()
   figma.root.setRelaunchData({ play: ''})
 } else {
-  figma.ui.postMessage("invalid file")
-  setTimeout(() => {
-    figma.ui.resize(300, 200)
-    figma.ui.show()
-  }, 500) // Buffer time to prevent flickering.
+  invalidFile()
 }
 
 const UNIT = 60
@@ -57,6 +67,9 @@ const CLOCK_TICK = 800
 const TETRIMO_COMPONENTS: Array<ComponentNode> = <Array<ComponentNode>>figma.root.findAll(node => {
   return node.type === 'COMPONENT' && node.name.length === 1
 })
+
+const DEAD_ROW: ComponentNode = <ComponentNode> figma.root.findOne(node => node.type === 'COMPONENT' && node.name === 'Dead Row')
+const PENDING_DEAD_ROW: ComponentNode = <ComponentNode> figma.root.findOne(node => node.type === 'COMPONENT' && node.name === 'Pending Dead Row')
 
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
@@ -70,12 +83,23 @@ let visibleTetrimoGroup: SceneNode & ChildrenMixin
 let rotationNum = 0
 let needNewTetrimo = true
 let score = 0
-let playerNum = 1;
+let playerNum = 1
+let combo = 0
+let multiplayer = false
 
 let BOARD_PARENT_FRAME: FrameNode = figma.currentPage.findOne(node => node.name === `Player ${playerNum}`) as FrameNode
-let BOARD: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
+!BOARD_PARENT_FRAME && invalidFile()
+
+let BOARD_AND_DEAD_ROWS: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === 'Board + Dead Lines') as FrameNode
+!BOARD_PARENT_FRAME && invalidFile()
+
+let BOARD: FrameNode = BOARD_AND_DEAD_ROWS.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
 let NEXT_PIECE: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece") as FrameNode
 let HOLD: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold") as FrameNode
+let DEAD_ROW_QUEUE: FrameNode = BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue') as FrameNode
+
+let OPPONENT_BOARD_PARENT_FRAME: FrameNode = figma.currentPage.findOne(node => node.name === `Player ${playerNum == 1 ? 2 : 1}`) as FrameNode
+let OPPONENT_DEAD_ROW_QUEUE: FrameNode = OPPONENT_BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue') as FrameNode
 
 function clone(val) {
   const type = typeof val
@@ -100,6 +124,18 @@ function clone(val) {
   throw 'unknown'
 }
 
+const enableMultiplayer = () => {
+  multiplayer = true;
+  figma.currentPage.findOne(node => node.name === `Player 2`).visible = true
+}
+
+const disableMultiplayer = () => {
+  multiplayer = false;
+  updatePlayerNum(1)
+
+  figma.currentPage.findOne(node => node.name === `Player 2`).visible = false
+}
+
 const updatePlayerNum = (num: number) => {
   if (playerNum === num) return
 
@@ -111,6 +147,11 @@ const updatePlayerNum = (num: number) => {
   BOARD = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME') as FrameNode
   NEXT_PIECE = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece") as FrameNode
   HOLD = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold") as FrameNode
+  DEAD_ROW_QUEUE = BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue') as FrameNode
+  BOARD_AND_DEAD_ROWS = BOARD_PARENT_FRAME.findOne(node => node.name === 'Board + Dead Lines') as FrameNode
+
+  OPPONENT_BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${playerNum == 1 ? 2 : 1}`) as FrameNode
+  OPPONENT_DEAD_ROW_QUEUE = OPPONENT_BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue') as FrameNode
 }
 
 // This stores which coordinates of the board are filled.
@@ -126,13 +167,18 @@ const addToFilledCoords = (unitNode: RectangleNode) => {
   newRectangle.x = x * UNIT
   newRectangle.y = y * UNIT
 
+  newRectangle.constraints = { horizontal: 'MIN', vertical: 'MAX' }
+
   BOARD.appendChild(newRectangle)
-  _filledCoords[y][x] = newRectangle
+
+  const filledCoordsY = y + numDeadRows()
+  if (!_filledCoords[filledCoordsY]) { _filledCoords[filledCoordsY] = {}}
+  _filledCoords[y + numDeadRows()][x] = newRectangle
 }
 
 const coordIsFilled = (coord: {x: number, y: number}): boolean => {
   const {x ,y} = coord
-  return !!(_filledCoords[y] && _filledCoords[y][x])
+  return !!(_filledCoords[y + numDeadRows()] && _filledCoords[y + numDeadRows()][x])
 }
 
 const tetrimoGroup = (): SceneNode & ChildrenMixin => {
@@ -148,9 +194,45 @@ const unitBoardCoordinates = (unitNode: SceneNode) => {
   return TUP(asUnits(x), asUnits(y))
 }
 
+const addDeadRowsFromQueue = () => {
+  const numRows = numPendingDeadRows()
+  setNumPendingDeadRows(0)
+  for (let i = 0; i < numRows; i++) {
+    BOARD_AND_DEAD_ROWS.appendChild(DEAD_ROW.createInstance())
+  }
+}
+
+const removeDeadRows = (n: number) => {
+  const deadRows = BOARD_AND_DEAD_ROWS.findAll(child => child !== BOARD)
+  deadRows.slice(0, n).forEach(row => row.remove())
+}
+
+const numDeadRows = () => BOARD_AND_DEAD_ROWS.children.length - 1
+
+const numPendingDeadRows = () => DEAD_ROW_QUEUE.children.length
+const setNumPendingDeadRows = (n) => {
+  const currPending = numPendingDeadRows()
+  if (n > currPending) {
+    for (let i = 0; i < n - currPending; i++) {
+      DEAD_ROW_QUEUE.appendChild(PENDING_DEAD_ROW.createInstance())
+    }
+  } else {
+    DEAD_ROW_QUEUE.children.slice(0, currPending - n).forEach(node => node.remove())
+  }
+}
+
+const sendPendingDeadRowsToOpponent = (n) => {
+  for (let i = 0; i < n; i++) {
+    OPPONENT_DEAD_ROW_QUEUE.appendChild(PENDING_DEAD_ROW.createInstance())
+  }
+}
+
 const resetGame = () => {
   clearInterval(gameFunction)
   gameFunction = null
+  BOARD_AND_DEAD_ROWS.children.forEach(child => child !== BOARD && child.remove())
+  setNumPendingDeadRows(0)
+
   BOARD.children.forEach(child => child.remove())
   NEXT_PIECE?.children?.forEach(child => child.remove())
   HOLD?.children?.forEach(child => child.remove())
@@ -314,11 +396,11 @@ const canMoveDown = (): boolean => {
 
     // If the coordinate vertically below the current one is filled, then we cannot move down
     if (coordIsFilled({x, y: y+1})) {
-      needNewTetrimo = true
+      moveToNextPiece()
       return false
     }
-    if (y == 19) {
-      needNewTetrimo = true
+    if (y == 19 - numDeadRows()) {
+      moveToNextPiece()
       return false
     }
   }
@@ -331,13 +413,15 @@ const updateFilledCoords = () => {
   unitChildren.forEach(unitChild => {
     addToFilledCoords(unitChild as RectangleNode)
 
-    if (_filledCoords[0]) {
+    if (_filledCoords[numDeadRows()] && Object.keys(_filledCoords[numDeadRows()]).length > 0) {
       // Game has ended.
       figma.closePlugin()
     }
   })
 }
 
+// Checks if there are any full rows and clears them if there are.
+// Returns number of rows cleared.
 const checkAndClearRow = () => {
   const rowsToClear:{[y: number]: true} = {}
   Object.keys(_filledCoords).sort().forEach(y => {
@@ -368,9 +452,35 @@ const checkAndClearRow = () => {
     }
   }
 
-  if (rowsToClear) {
-    updateScore(Object.keys(rowsToClear).length)
+  const numRowsCleared = Object.keys(rowsToClear).length
+  if (numRowsCleared) {
+    updateScore(numRowsCleared)
+    combo += 1
+  } else {
+    combo = 0
   }
+
+  return numRowsCleared
+}
+
+const numClearedToNumSent = (n: number) => {
+  let base = 0
+
+  if (combo > 10) {
+    base = 5
+  } else if (combo > 7) {
+    base = 4
+  } else if (combo > 5) {
+    base = 3
+  } else if (combo > 3) {
+    base = 2
+  } else if (combo > 2) {
+    base = 1
+  }
+
+  if (n <= 1) { return base }
+  if (n < 3) { return base + n - 1 }
+  if (n == 4) { return base + 4 }
 }
 
 const updateScore = (clearedRows: number) => {
@@ -392,14 +502,42 @@ const updateScore = (clearedRows: number) => {
   figma.ui.postMessage(score)
 }
 
+const moveToNextPiece = () => {
+  visibleTetrimoGroup && updateFilledCoords()
+  const numClearedRows = checkAndClearRow()
+  updateMultiplayerGarbageLines(numClearedRows)
+  generateCurrentTetrimo()
+}
+
+const updateMultiplayerGarbageLines = (numClearedRows: number) => {
+  if (!multiplayer) return
+
+  if (numClearedRows) {
+    let numRowsToSend = numClearedToNumSent(numClearedRows)
+    if (numPendingDeadRows()) {
+      numRowsToSend -= numPendingDeadRows()
+      setNumPendingDeadRows(Math.max(-1 * numRowsToSend, 0))
+    }
+
+    const deadRows = numDeadRows()
+    if (numRowsToSend > 0 && deadRows) {
+      removeDeadRows(numRowsToSend)
+      numRowsToSend -= deadRows
+    }
+
+    if (numRowsToSend > 0) {
+      sendPendingDeadRowsToOpponent(numRowsToSend)
+    }
+  } else {
+    addDeadRowsFromQueue()
+  }
+}
+
 // Code for one clock tick of the game.
 // Repeating this function is handled by a setInterval method in message handler.
 const play = () => {
   if (needNewTetrimo) {
-    visibleTetrimoGroup && updateFilledCoords()
-    checkAndClearRow()
-    generateCurrentTetrimo()
-    return
+    moveToNextPiece()
   }
 
   // Move down if there are no other operations currently happening

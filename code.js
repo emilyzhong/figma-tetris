@@ -1,5 +1,5 @@
 // Visible starts out as false and becomes true after checking if file is valid.
-figma.showUI(__html__, { visible: false, height: 320, width: 350 });
+figma.showUI(__html__, { visible: false, height: 453, width: 400 });
 figma.ui.onmessage = msg => {
     switch (msg.type) {
         case 'start':
@@ -28,13 +28,26 @@ figma.ui.onmessage = msg => {
         case 'hold':
             hold();
             break;
+        case 'enable-multiplayer':
+            enableMultiplayer();
+            break;
+        case 'disable-multiplayer':
+            disableMultiplayer();
+            break;
         case 'player-1-select':
             updatePlayerNum(1);
             break;
         case 'player-2-select':
             updatePlayerNum(2);
             break;
+        case 'dead-row': // Simulate adding a dead row to the queue. Only for development purposes
+            setNumPendingDeadRows(numPendingDeadRows() + 1);
+            break;
     }
+};
+const invalidFile = () => {
+    figma.notify('Invalid / out of date file: Please duplicate the Figma tetris file and try again.');
+    figma.closePlugin();
 };
 const playPage = figma.root.findChild(node => node.name === 'Play');
 if (playPage) {
@@ -43,11 +56,7 @@ if (playPage) {
     figma.root.setRelaunchData({ play: '' });
 }
 else {
-    figma.ui.postMessage("invalid file");
-    setTimeout(() => {
-        figma.ui.resize(300, 200);
-        figma.ui.show();
-    }, 500); // Buffer time to prevent flickering.
+    invalidFile();
 }
 const UNIT = 60;
 const CLOCK_TICK = 800;
@@ -55,6 +64,8 @@ const CLOCK_TICK = 800;
 const TETRIMO_COMPONENTS = figma.root.findAll(node => {
     return node.type === 'COMPONENT' && node.name.length === 1;
 });
+const DEAD_ROW = figma.root.findOne(node => node.type === 'COMPONENT' && node.name === 'Dead Row');
+const PENDING_DEAD_ROW = figma.root.findOne(node => node.type === 'COMPONENT' && node.name === 'Pending Dead Row');
 // Figma sets the (x, y) attributes of a shape to the upper left corner.
 // Y increases as it goes downwards, X increases to the right.
 // These coordiantes are the "solid" areas of each tetrimo type,
@@ -67,10 +78,18 @@ let rotationNum = 0;
 let needNewTetrimo = true;
 let score = 0;
 let playerNum = 1;
+let combo = 0;
+let multiplayer = false;
 let BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${playerNum}`);
-let BOARD = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME');
+!BOARD_PARENT_FRAME && invalidFile();
+let BOARD_AND_DEAD_ROWS = BOARD_PARENT_FRAME.findOne(node => node.name === 'Board + Dead Lines');
+!BOARD_PARENT_FRAME && invalidFile();
+let BOARD = BOARD_AND_DEAD_ROWS.findOne(node => node.name === "Board" && node.type === 'FRAME');
 let NEXT_PIECE = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece");
 let HOLD = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold");
+let DEAD_ROW_QUEUE = BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue');
+let OPPONENT_BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${playerNum == 1 ? 2 : 1}`);
+let OPPONENT_DEAD_ROW_QUEUE = OPPONENT_BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue');
 function clone(val) {
     const type = typeof val;
     if (val === null) {
@@ -97,6 +116,15 @@ function clone(val) {
     }
     throw 'unknown';
 }
+const enableMultiplayer = () => {
+    multiplayer = true;
+    figma.currentPage.findOne(node => node.name === `Player 2`).visible = true;
+};
+const disableMultiplayer = () => {
+    multiplayer = false;
+    updatePlayerNum(1);
+    figma.currentPage.findOne(node => node.name === `Player 2`).visible = false;
+};
 const updatePlayerNum = (num) => {
     if (playerNum === num)
         return;
@@ -106,6 +134,10 @@ const updatePlayerNum = (num) => {
     BOARD = BOARD_PARENT_FRAME.findOne(node => node.name === "Board" && node.type === 'FRAME');
     NEXT_PIECE = BOARD_PARENT_FRAME.findOne(node => node.name === "Next Piece");
     HOLD = BOARD_PARENT_FRAME.findOne(node => node.name === "Hold");
+    DEAD_ROW_QUEUE = BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue');
+    BOARD_AND_DEAD_ROWS = BOARD_PARENT_FRAME.findOne(node => node.name === 'Board + Dead Lines');
+    OPPONENT_BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${playerNum == 1 ? 2 : 1}`);
+    OPPONENT_DEAD_ROW_QUEUE = OPPONENT_BOARD_PARENT_FRAME.findOne(node => node.name === 'Pending Dead Row Queue');
 };
 // This stores which coordinates of the board are filled.
 // It is first indexed on y, then x, then a rectangle node that will sit at that location.
@@ -120,12 +152,17 @@ const addToFilledCoords = (unitNode) => {
     newRectangle.fills = clone(unitNode.fills);
     newRectangle.x = x * UNIT;
     newRectangle.y = y * UNIT;
+    newRectangle.constraints = { horizontal: 'MIN', vertical: 'MAX' };
     BOARD.appendChild(newRectangle);
-    _filledCoords[y][x] = newRectangle;
+    const filledCoordsY = y + numDeadRows();
+    if (!_filledCoords[filledCoordsY]) {
+        _filledCoords[filledCoordsY] = {};
+    }
+    _filledCoords[y + numDeadRows()][x] = newRectangle;
 };
 const coordIsFilled = (coord) => {
     const { x, y } = coord;
-    return !!(_filledCoords[y] && _filledCoords[y][x]);
+    return !!(_filledCoords[y + numDeadRows()] && _filledCoords[y + numDeadRows()][x]);
 };
 const tetrimoGroup = () => {
     return visibleTetrimoGroup.parent;
@@ -137,10 +174,41 @@ const unitBoardCoordinates = (unitNode) => {
     const y = unitNode.y + tetrimoParent.y;
     return TUP(asUnits(x), asUnits(y));
 };
+const addDeadRowsFromQueue = () => {
+    const numRows = numPendingDeadRows();
+    setNumPendingDeadRows(0);
+    for (let i = 0; i < numRows; i++) {
+        BOARD_AND_DEAD_ROWS.appendChild(DEAD_ROW.createInstance());
+    }
+};
+const removeDeadRows = (n) => {
+    const deadRows = BOARD_AND_DEAD_ROWS.findAll(child => child !== BOARD);
+    deadRows.slice(0, n).forEach(row => row.remove());
+};
+const numDeadRows = () => BOARD_AND_DEAD_ROWS.children.length - 1;
+const numPendingDeadRows = () => DEAD_ROW_QUEUE.children.length;
+const setNumPendingDeadRows = (n) => {
+    const currPending = numPendingDeadRows();
+    if (n > currPending) {
+        for (let i = 0; i < n - currPending; i++) {
+            DEAD_ROW_QUEUE.appendChild(PENDING_DEAD_ROW.createInstance());
+        }
+    }
+    else {
+        DEAD_ROW_QUEUE.children.slice(0, currPending - n).forEach(node => node.remove());
+    }
+};
+const sendPendingDeadRowsToOpponent = (n) => {
+    for (let i = 0; i < n; i++) {
+        OPPONENT_DEAD_ROW_QUEUE.appendChild(PENDING_DEAD_ROW.createInstance());
+    }
+};
 const resetGame = () => {
     var _a, _b;
     clearInterval(gameFunction);
     gameFunction = null;
+    BOARD_AND_DEAD_ROWS.children.forEach(child => child !== BOARD && child.remove());
+    setNumPendingDeadRows(0);
     BOARD.children.forEach(child => child.remove());
     (_a = NEXT_PIECE === null || NEXT_PIECE === void 0 ? void 0 : NEXT_PIECE.children) === null || _a === void 0 ? void 0 : _a.forEach(child => child.remove());
     (_b = HOLD === null || HOLD === void 0 ? void 0 : HOLD.children) === null || _b === void 0 ? void 0 : _b.forEach(child => child.remove());
@@ -291,11 +359,11 @@ const canMoveDown = () => {
         const { x, y } = unitBoardCoordinates(unitChild);
         // If the coordinate vertically below the current one is filled, then we cannot move down
         if (coordIsFilled({ x, y: y + 1 })) {
-            needNewTetrimo = true;
+            moveToNextPiece();
             return false;
         }
-        if (y == 19) {
-            needNewTetrimo = true;
+        if (y == 19 - numDeadRows()) {
+            moveToNextPiece();
             return false;
         }
     }
@@ -305,12 +373,14 @@ const updateFilledCoords = () => {
     const unitChildren = visibleTetrimoGroup.children;
     unitChildren.forEach(unitChild => {
         addToFilledCoords(unitChild);
-        if (_filledCoords[0]) {
+        if (_filledCoords[numDeadRows()] && Object.keys(_filledCoords[numDeadRows()]).length > 0) {
             // Game has ended.
             figma.closePlugin();
         }
     });
 };
+// Checks if there are any full rows and clears them if there are.
+// Returns number of rows cleared.
 const checkAndClearRow = () => {
     const rowsToClear = {};
     Object.keys(_filledCoords).sort().forEach(y => {
@@ -339,8 +409,41 @@ const checkAndClearRow = () => {
             });
         }
     }
-    if (rowsToClear) {
-        updateScore(Object.keys(rowsToClear).length);
+    const numRowsCleared = Object.keys(rowsToClear).length;
+    if (numRowsCleared) {
+        updateScore(numRowsCleared);
+        combo += 1;
+    }
+    else {
+        combo = 0;
+    }
+    return numRowsCleared;
+};
+const numClearedToNumSent = (n) => {
+    let base = 0;
+    if (combo > 10) {
+        base = 5;
+    }
+    else if (combo > 7) {
+        base = 4;
+    }
+    else if (combo > 5) {
+        base = 3;
+    }
+    else if (combo > 3) {
+        base = 2;
+    }
+    else if (combo > 2) {
+        base = 1;
+    }
+    if (n <= 1) {
+        return base;
+    }
+    if (n < 3) {
+        return base + n - 1;
+    }
+    if (n == 4) {
+        return base + 4;
     }
 };
 const updateScore = (clearedRows) => {
@@ -363,14 +466,39 @@ const updateScore = (clearedRows) => {
     }
     figma.ui.postMessage(score);
 };
+const moveToNextPiece = () => {
+    visibleTetrimoGroup && updateFilledCoords();
+    const numClearedRows = checkAndClearRow();
+    updateMultiplayerGarbageLines(numClearedRows);
+    generateCurrentTetrimo();
+};
+const updateMultiplayerGarbageLines = (numClearedRows) => {
+    if (!multiplayer)
+        return;
+    if (numClearedRows) {
+        let numRowsToSend = numClearedToNumSent(numClearedRows);
+        if (numPendingDeadRows()) {
+            numRowsToSend -= numPendingDeadRows();
+            setNumPendingDeadRows(Math.max(-1 * numRowsToSend, 0));
+        }
+        const deadRows = numDeadRows();
+        if (numRowsToSend > 0 && deadRows) {
+            removeDeadRows(numRowsToSend);
+            numRowsToSend -= deadRows;
+        }
+        if (numRowsToSend > 0) {
+            sendPendingDeadRowsToOpponent(numRowsToSend);
+        }
+    }
+    else {
+        addDeadRowsFromQueue();
+    }
+};
 // Code for one clock tick of the game.
 // Repeating this function is handled by a setInterval method in message handler.
 const play = () => {
     if (needNewTetrimo) {
-        visibleTetrimoGroup && updateFilledCoords();
-        checkAndClearRow();
-        generateCurrentTetrimo();
-        return;
+        moveToNextPiece();
     }
     // Move down if there are no other operations currently happening
     moveCurrentTetrimoY(1);

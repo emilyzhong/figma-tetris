@@ -1,4 +1,4 @@
-<div id="content" class='type type--pos-small-normal'>
+<div id="content" class='type type--pos-medium-normal'>
   <div id="main">
   <div id="instructions">
     <b class="type type--pos-large-bold">Controls</b>
@@ -15,10 +15,19 @@
       </ul>
     </div>
   </div>
-  <b class="type type--pos-large-bold">Select Multiplayer (optional)</b>
+  <b class="type type--pos-large-bold">2-Player mode (experimental)</b>
+  <p style="margin: 4px 0 8px 0;">
+    This setting allows two players to play Tetris battle on the same Figma file.
+    To do this, both players need to be on the same Figma Tetris file, with each running this plugin
+    with the checkbox below enabled.
+  </p>
   <div>
-    <input type="radio" id="player-1-select" name="player" value="1" onclick="selectMultiplayer(this)"><label for="1">Player 1</label>
-    <input type="radio" id="player-2-select" name="player" value="2" onclick="selectMultiplayer(this)"><label for="2">Player 2</label>
+    <label><input type="checkbox" id="multiplayer-checkbox" onclick="enableMultiplayer(this)">Enable 2-player mode</label>
+  </div>
+  <div id="multiplayer-select" style='display: none;'>
+    <b class="type type--pos-medium-bold">Play as:</b>
+    <label for="1"><input type="radio" id="player-1-select" name="player" value="1" onclick="selectMultiplayer(this)" disabled>Player 1</label>
+    <label for="2"><input type="radio" id="player-2-select" name="player" value="2" onclick="selectMultiplayer(this)" disabled>Player 2</label>
   </div>
   <div id="note">
     <div id="warning-icon">⚠️</div>
@@ -26,7 +35,7 @@
       <b>To play Figma Tetris, the plugin needs to be run on a Figma Tetris file.</b> <br>
       <div id="more-text">
         If you've already duplicated it, you're good to go! You can duplicate the most updated version of the file <a href="https://www.figma.com/community/file/831343347679737844" target="_blank">here</a>.
-        Some newer features may not work on older versions of the file.
+        Some newer features (such as 2-player mode) may not work on older versions of the file.
       </div>
     </div>
   </div>
@@ -56,6 +65,21 @@ resetGame = () => {
   sendMessage('reset')
   document.getElementById('player-1-select').disabled = false
   document.getElementById('player-2-select').disabled = false
+}
+
+enableMultiplayer = (checkbox) => {
+  const enabled = checkbox.checked
+  if (enabled) {
+    sendMessage('enable-multiplayer')
+    document.getElementById('multiplayer-select').style.display = 'block'
+    document.getElementById('player-1-select').disabled = false
+    document.getElementById('player-2-select').disabled = false
+  } else {
+    sendMessage('disable-multiplayer')
+    document.getElementById('multiplayer-select').style.display = 'none'
+    document.getElementById('player-1-select').disabled = true
+    document.getElementById('player-2-select').disabled = true
+  }
 }
 
 selectMultiplayer = (selection) => {
@@ -93,6 +117,11 @@ document.addEventListener('keydown', (e) => {
     case 'KeyC':
       sendMessage('hold')
       break
+
+    // For multiplayer debugging purposes only
+    // case 'Enter':
+    //   sendMessage('dead-row')
+    //   break
   }
 })
 
@@ -110,6 +139,10 @@ onmessage = (event) => {
 </script>
 
 <style>
+  input {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
 
   #content {
     padding: 4px 16px;
@@ -130,6 +163,10 @@ onmessage = (event) => {
 
   #instructions-inner {
     display: flex;
+  }
+
+  #multiplayer-select {
+    margin-top: 8px;
   }
 
   #note {
