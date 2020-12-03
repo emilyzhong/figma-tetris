@@ -86,6 +86,7 @@ let score = 0
 let playerNum = 1
 let combo = 0
 let multiplayer = false
+let hasHeld = false // Used to only allow users to swap held once per turn
 
 let BOARD_PARENT_FRAME: FrameNode = figma.currentPage.findOne(node => node.name === `Player ${playerNum}`) as FrameNode
 !BOARD_PARENT_FRAME && invalidFile()
@@ -365,7 +366,7 @@ const rotate = () => {
 }
 
 const hold = () => {
-  if (!HOLD) { return }
+  if (!HOLD || hasHeld) { return }
   const heldPiece = HOLD.findChild(() => true) as SceneNode & ChildrenMixin
   // Add curent piece to hold
   const currentPiece = tetrimoGroup()
@@ -384,6 +385,8 @@ const hold = () => {
     BOARD.appendChild(heldPiece)
     visibleTetrimoGroup = heldPiece.findChild(node => node.visible) as SceneNode & ChildrenMixin
   }
+
+  hasHeld = true
 }
 
 const canMoveDown = (): boolean => {
@@ -507,6 +510,7 @@ const moveToNextPiece = () => {
   const numClearedRows = checkAndClearRow()
   updateMultiplayerGarbageLines(numClearedRows)
   generateCurrentTetrimo()
+  hasHeld = false
 }
 
 const updateMultiplayerGarbageLines = (numClearedRows: number) => {

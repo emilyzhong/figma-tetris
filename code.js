@@ -80,6 +80,7 @@ let score = 0;
 let playerNum = 1;
 let combo = 0;
 let multiplayer = false;
+let hasHeld = false; // Used to only allow users to swap held once per turn
 let BOARD_PARENT_FRAME = figma.currentPage.findOne(node => node.name === `Player ${playerNum}`);
 !BOARD_PARENT_FRAME && invalidFile();
 let BOARD_AND_DEAD_ROWS = BOARD_PARENT_FRAME.findOne(node => node.name === 'Board + Dead Lines');
@@ -327,7 +328,7 @@ const rotate = () => {
     }
 };
 const hold = () => {
-    if (!HOLD) {
+    if (!HOLD || hasHeld) {
         return;
     }
     const heldPiece = HOLD.findChild(() => true);
@@ -348,6 +349,7 @@ const hold = () => {
         BOARD.appendChild(heldPiece);
         visibleTetrimoGroup = heldPiece.findChild(node => node.visible);
     }
+    hasHeld = true;
 };
 const canMoveDown = () => {
     const unitChildren = visibleTetrimoGroup.children;
@@ -471,6 +473,7 @@ const moveToNextPiece = () => {
     const numClearedRows = checkAndClearRow();
     updateMultiplayerGarbageLines(numClearedRows);
     generateCurrentTetrimo();
+    hasHeld = false;
 };
 const updateMultiplayerGarbageLines = (numClearedRows) => {
     if (!multiplayer)
